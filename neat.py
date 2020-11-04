@@ -6,6 +6,7 @@ import nn
 import configparser
 from random import uniform
 
+# Configurations
 config = configparser.ConfigParser()
 config.read('config.ini')
 
@@ -15,6 +16,7 @@ w_init_min = float(config['Genome']['weight_init_max'])
 w_init_max = float(config['Genome']['weight_init_min'])
 
 comp_thres = float(config['Species']['compatibility_threshold'])
+
 
 class Node:
     def __init__(self, network_type, id):
@@ -42,6 +44,7 @@ class Genome:
         return nn.create(self)
 
 
+# Store genomes and common properties
 class Population:
     def __init__(self, size):
 
@@ -49,6 +52,8 @@ class Population:
         self.species = []
         self.innov_number = 0
         self.node_number = 1
+
+        # Generate first population
         for _ in range(size):
 
             nodes = []
@@ -68,9 +73,12 @@ class Population:
             self.species.append(self.genomes[0])
             self.genomes.append(Genome(nodes, connections))
 
+        # First Speciation
         self.species = []
 
+
 def comp_distance(genome_1, genome_2):  # Compatibility distance
+    # Used for speciation. Compares two genomes and returns their similarity based on structure.
     """
     :param float E: Excess genes
     :param float D: Disjoint genes
@@ -88,6 +96,8 @@ def comp_distance(genome_1, genome_2):  # Compatibility distance
 
 
 def adjusted_fitness(G):
+    # Every genome will get a fitness score after testing. This function will adjust this score based on
+    # its population size, such that smaller species do not instantly eradicate.
     """
     :param Genotype G: Genotype
     :return float:

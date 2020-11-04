@@ -6,6 +6,7 @@ def sigmoid(x):
 
 class Node:
 
+# TODO: Overhaul. Use tensor?
 class FFNN:
     def __init__(self, population):
         self.input_nodes = [node for node in population.nodes if node.type == 'input']
