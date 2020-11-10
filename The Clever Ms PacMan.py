@@ -1,3 +1,5 @@
+from random import random
+
 import gym
 import nn
 import neat
@@ -13,14 +15,15 @@ config.read('config.ini')
 pop_size = int(config['Environment']['population_size'])
 render = bool(config['Environment']['render'])
 
-
 env = None
+
 
 # Initialize atari environment
 def start():
     global env
     env = gym.make('MsPacMan-ram-v0')
     env.reset()
+
 
 # Give every genome a fitness score
 def selection():
@@ -43,7 +46,7 @@ def selection():
             # input action
             observation, reward, done, info = env.step(action)
             # calculate fitness (can be changed)
-            genome.fitness += reward/10 + 2
+            genome.fitness += reward / 10 + 2
             # ends test if game over
             if done:
                 break
@@ -66,8 +69,36 @@ def exterminate():
 
 
 # create new genomes based on two living genomes (restore population)
-def crossover():
-    pass
+def crossover(genome1, genome2):
+    if genome1.fitness > genome2.fitness:
+        parent1, parent2 = genome1, genome2
+    else:
+        parent1, parent2 = genome2, genome1
+
+    # implement the new genome
+    new_gene = neat.Genome.__class__(parent1.key)
+
+    # Inherit connection genes
+    for key, cg1 in parent1.connections.items():
+        cg2 = parent2.connections.get(key)
+        if cg2 is None:
+            new_gene.connections[key] = cg1.copy()
+        else:
+            new_gene.connections[key] = crossover(cg1, cg2)
+
+    # Inherit node genes
+    parent1_set = parent1.nodes
+    parent2_set = parent2.nodes
+
+    for key, ng1 in parent1_set.items():
+        ng2 = parent2_set.get(key)
+        assert key not in new_gene.nodes
+        if ng2 is None:
+            new_gene.nodes[key] = ng1.copy()
+        else:
+            # Homologous gene: combine genes from both parents.
+            new_gene.nodes[key] = crossover(ng1, ng2)
+    return new_gene
 
 
 # mutations to weights, add new nodes and connections
