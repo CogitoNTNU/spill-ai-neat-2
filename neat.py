@@ -1,7 +1,7 @@
 # NeuroEvolution of Augmented Topologies (NEAT)
 # Paper: http://nn.cs.utexas.edu/downloads/papers/stanley.ec02.pdf
 
-import nn
+#import nn
 
 import configparser
 from random import uniform
@@ -104,3 +104,60 @@ def adjusted_fitness(G):
     """
     return G.fitness / (sum(0 if cd > comp_thres else 1 for cd in [comp_distance(_, _, _, _) for G_j in Genes]))
 
+
+e = 2.71828182845904523536
+
+
+def sigmoid(x):
+    return 1 / (1 + e**(-x))
+
+
+def tanh(x):
+    return (e**x - e**-x) / (e**x + e**-x)
+
+
+def relu(x):
+    return max(0, x)
+
+
+def find_parents(node, nodes, connections):
+    parents_c = [c for c in connections if c.o == node.id and c.active]
+    ids = [c.i for c in parents_c]
+    return [n for n in nodes if n.id in ids], parents_c
+
+
+def get_value(node, nodes, connections, observation):
+    if node.type == "input":
+        return observation[node.id]
+
+    parents, parents_c = find_parents(node, nodes, connections)
+    parents_v = [get_value(parent, nodes, connections, observation) for parent in parents]
+    parents_v_sum = sum([parents_v[i] * parents_c[i].w for i in range(len(parents_v))])
+    return node.activation_f(parents_v_sum)
+
+
+class FFNN:
+    def __init__(self, genome):
+        self.input_nodes = [node for node in genome.nodes if node.type == 'input']
+        self.input_nodes.sort(key=lambda node: node.id)
+        self.output_nodes = [node for node in genome.nodes if node.type == 'output']
+        self.input_nodes.sort(key=lambda node: node.id)
+        self.nodes = [node for node in genome.nodes]
+        self.connections = genome.connections
+
+    def activate(self, observation):
+        values = []
+        for output in self.output_nodes:
+            values.append(get_value(output, self.nodes, self.connections, observation))
+        return values
+
+
+"""
+xorgenome = Genome([Node("input", 0), Node("input", 1), Node("hidden", 2), Node("hidden", 3), Node("output", 4, sigmoid)],
+                   [Connection(0, 2, 1), Connection(0, 3, -1), Connection(1, 2, 1), Connection(1, 3, -1),
+                    Connection(2, 4, 1), Connection(3, 4, 1)])
+
+xorffnn = FFNN(xorgenome)
+
+print(xorffnn.activate([1, 0]))
+"""
