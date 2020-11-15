@@ -132,10 +132,8 @@ def adjusted_fitness(G):
 
 
 def find_yourself(to_find, current_node, connections):
-    connect_to = [c.o for c in connections if c.i == current_node.id]
+    connect_to = [c.o for c in connections if c.i == current_node]
     for next_node in connect_to:
-        if next_node.type == "output":
-            continue
         if next_node == to_find:
             return True
         if find_yourself(to_find, next_node, connections):
@@ -144,26 +142,18 @@ def find_yourself(to_find, current_node, connections):
 
 
 def mutate(genome, population):
-    prob_mut_w = 0.5  # mutate weight
-    mut_w_min = -1
-    mut_w_max = 1
-
-    prob_mut_n = 0.5  # mutate node
-    prob_mut_c = 0.5  # mutate connection
-    prob_mut_a = 0.1  # activate connection
-    prob_mut_d = 0.1  # deactivate connection
 
     # Weight mutation
     for c in genome.connections:
-        if random.random() > prob_mut_w:
+        if random.random() < prob_mut_w:
             c.w += random.uniform(-1, 1)
-        if random.random() > prob_mut_a:
+        if random.random() < prob_mut_a:
             c.active = 1
-        if random.random() > prob_mut_d:
+        if random.random() < prob_mut_d:
             c.active = 0
 
     # Node mutation
-    if random.random() > prob_mut_n:
+    if random.random() < prob_mut_n:
         c_chosen = random.choice(genome.connections)  # choose which nodes will get a new node between them
         genome.nodes.append(Node('hidden', population.node_number))  # create new node in genome
         population.node_number += 1
@@ -177,15 +167,22 @@ def mutate(genome, population):
         c_chosen.active = 0
 
     # Connection mutation
-    if random.random() > prob_mut_c:
-        i_node = random.choice([n for n in genome.nodes if n.type != 'output'])
-        o_node = [n for n in genome.nodes if n.id == i_node.id and
-                  n.type != 'input' and
-                  filter(lambda c: c.i == i_node.id and c.o == n.id, genome.connections) and
-                  not find_yourself(i_node, n.id, genome.connections)]
-        genome.connections.append(
-            Connection(i_node, o_node, random.uniform(mut_w_min, mut_w_max), population.innov_number))
-        population.innov_number += 1
+    if random.random() < prob_mut_c:
+        i_nodes = [n for n in genome.nodes if n.type != 'output']
+        random.shuffle(i_nodes)
+        for i_node in i_nodes:
+
+            o_nodes = [n for n in genome.nodes if n.id != i_node.id and
+                      n.type != 'input' and
+                      filter(lambda c: c.i == i_node.id and c.o == n.id, genome.connections) and
+                      not find_yourself(i_node, n.id, genome.connections)]
+
+            if len(o_nodes):
+                o_node = random.choice(o_nodes)
+                genome.connections.append(
+                    Connection(i_node.id, o_node.id, random.uniform(mut_w_min, mut_w_max), population.innov_number))
+                population.innov_number += 1
+                break
 
 
 def find_parents(node, nodes, connections):
@@ -219,13 +216,32 @@ class FFNN:
             values.append(get_value(output, self.nodes, self.connections, observation))
         return values
 
+def print_genome(genome):
+    i = list([n.id for n in genome.nodes if n.type == 'input'])
+    h = list([n.id for n in genome.nodes if n.type == 'hidden'])
+    o = list([n.id for n in genome.nodes if n.type == 'output'])
+    print(f'{len(genome.nodes)} Nodes:')
+    print(len(i), 'input:')
+    print(i)
+    print(len(h), 'hidden:')
+    print(h)
+    print(len(o), 'output:')
+    print(o)
+    print(f'{len(genome.connections)} Connections')
+    for c in genome.connections:
+        print(f"{c.i} -> {c.o} | w: {c.w}, active: {c.active}")
 
-"""
 xorgenome = Genome([Node("input", 0), Node("input", 1), Node("hidden", 2), Node("hidden", 3), Node("output", 4, sigmoid)],
                    [Connection(0, 2, 1, 0), Connection(0, 3, -1, 1), Connection(1, 2, 1, 2), Connection(1, 3, -1, 3),
                     Connection(2, 4, 1, 4), Connection(3, 4, 1, 5)])
 
 xorffnn = FFNN(xorgenome)
 
+pop = Population(0)
+pop.genomes.append(xorgenome)
+pop.innov_number = 6
+pop.node_number = 5
+print_genome(xorgenome)
+mutate(xorgenome, pop)
+print_genome(xorgenome)
 print(xorffnn.activate([1, 0]))
-"""
