@@ -4,6 +4,7 @@
 #import nn
 
 import configparser
+import random
 from random import uniform
 
 # Configurations
@@ -17,11 +18,36 @@ w_init_max = float(config['Genome']['weight_init_min'])
 
 comp_thres = float(config['Species']['compatibility_threshold'])
 
+prob_mut_w = float(config['Mutation']['weight_probability'])
+mut_w_min = float(config['Mutation']['weight_min_change'])
+mut_w_max = float(config['Mutation']['weight_max_change'])
+
+prob_mut_n = float(config['Mutation']['node_probability'])
+prob_mut_c = float(config['Mutation']['connection_probability'])
+prob_mut_a = float(config['Mutation']['activate_probability'])
+prob_mut_d = float(config['Mutation']['deactivate_probability'])
+
+
+e = 2.71828182845904523536
+
+
+def sigmoid(x):
+    return 1 / (1 + e**(-x))
+
+
+def tanh(x):
+    return (e**x - e**-x) / (e**x + e**-x)
+
+
+def relu(x):
+    return max(0, x)
+
 
 class Node:
-    def __init__(self, network_type, id):
+    def __init__(self, network_type, id, activation_f=relu):
         self.type = network_type
         self.id = id
+        self.activation_f = activation_f
 
 
 class Connection:
@@ -41,7 +67,7 @@ class Genome:
         fitness = 0
 
     def create_nn(self):
-        return nn.create(self)
+        return FFNN(self)
 
 
 # Store genomes and common properties
@@ -105,19 +131,61 @@ def adjusted_fitness(G):
     return G.fitness / (sum(0 if cd > comp_thres else 1 for cd in [comp_distance(_, _, _, _) for G_j in Genes]))
 
 
-e = 2.71828182845904523536
+def find_yourself(to_find, current_node, connections):
+    connect_to = [c.o for c in connections if c.i == current_node.id]
+    for next_node in connect_to:
+        if next_node.type == "output":
+            continue
+        if next_node == to_find:
+            return True
+        if find_yourself(to_find, next_node, connections):
+            return True
+    return False
 
 
-def sigmoid(x):
-    return 1 / (1 + e**(-x))
+def mutate(genome, population):
+    prob_mut_w = 0.5  # mutate weight
+    mut_w_min = -1
+    mut_w_max = 1
 
+    prob_mut_n = 0.5  # mutate node
+    prob_mut_c = 0.5  # mutate connection
+    prob_mut_a = 0.1  # activate connection
+    prob_mut_d = 0.1  # deactivate connection
 
-def tanh(x):
-    return (e**x - e**-x) / (e**x + e**-x)
+    # Weight mutation
+    for c in genome.connections:
+        if random.random() > prob_mut_w:
+            c.w += random.uniform(-1, 1)
+        if random.random() > prob_mut_a:
+            c.active = 1
+        if random.random() > prob_mut_d:
+            c.active = 0
 
+    # Node mutation
+    if random.random() > prob_mut_n:
+        c_chosen = random.choice(genome.connections)  # choose which nodes will get a new node between them
+        genome.nodes.append(Node('hidden', population.node_number))  # create new node in genome
+        population.node_number += 1
+        # add connection from i-node in chosen connection to new node,
+        genome.connections.append(Connection(c_chosen.i, genome.nodes[-1].id, c_chosen.w, population.innov_number))
+        population.innov_number += 1
+        # add connection from new node to i-node in chosen connection,
+        genome.connections.append(Connection(genome.nodes[-1].id, c_chosen.o, c_chosen.w, population.innov_number))
+        population.innov_number += 1
+        # deactivate chosen connection
+        c_chosen.active = 0
 
-def relu(x):
-    return max(0, x)
+    # Connection mutation
+    if random.random() > prob_mut_c:
+        i_node = random.choice([n for n in genome.nodes if n.type != 'output'])
+        o_node = [n for n in genome.nodes if n.id == i_node.id and
+                  n.type != 'input' and
+                  filter(lambda c: c.i == i_node.id and c.o == n.id, genome.connections) and
+                  not find_yourself(i_node, n.id, genome.connections)]
+        genome.connections.append(
+            Connection(i_node, o_node, random.uniform(mut_w_min, mut_w_max), population.innov_number))
+        population.innov_number += 1
 
 
 def find_parents(node, nodes, connections):
@@ -154,8 +222,8 @@ class FFNN:
 
 """
 xorgenome = Genome([Node("input", 0), Node("input", 1), Node("hidden", 2), Node("hidden", 3), Node("output", 4, sigmoid)],
-                   [Connection(0, 2, 1), Connection(0, 3, -1), Connection(1, 2, 1), Connection(1, 3, -1),
-                    Connection(2, 4, 1), Connection(3, 4, 1)])
+                   [Connection(0, 2, 1, 0), Connection(0, 3, -1, 1), Connection(1, 2, 1, 2), Connection(1, 3, -1, 3),
+                    Connection(2, 4, 1, 4), Connection(3, 4, 1, 5)])
 
 xorffnn = FFNN(xorgenome)
 

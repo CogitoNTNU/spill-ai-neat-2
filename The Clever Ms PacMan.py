@@ -5,6 +5,7 @@ import neat
 import time
 
 import configparser
+import random
 
 # Configurations
 config = configparser.ConfigParser()
@@ -70,11 +71,6 @@ def crossover():
     pass
 
 
-# mutations to weights, add new nodes and connections
-def mutate():
-    pass
-
-
 if __name__ == '__main__':
     # Start environment
     start()
@@ -100,4 +96,4 @@ if __name__ == '__main__':
         genomes = crossover()
 
         # mutations: adjust weights, add new nodes and connections
-        genomes = mutate()
+        genomes = neat.mutate()
