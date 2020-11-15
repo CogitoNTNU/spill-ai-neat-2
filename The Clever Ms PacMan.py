@@ -1,8 +1,11 @@
+from random import random
+
 import gym
 import nn
 import neat
 
 import time
+import copy
 
 import configparser
 import random
@@ -14,14 +17,15 @@ config.read('config.ini')
 pop_size = int(config['Environment']['population_size'])
 render = bool(config['Environment']['render'])
 
-
 env = None
+
 
 # Initialize atari environment
 def start():
     global env
     env = gym.make('MsPacMan-ram-v0')
     env.reset()
+
 
 # Give every genome a fitness score
 def selection():
@@ -44,7 +48,7 @@ def selection():
             # input action
             observation, reward, done, info = env.step(action)
             # calculate fitness (can be changed)
-            genome.fitness += reward/10 + 2
+            genome.fitness += reward / 10 + 2
             # ends test if game over
             if done:
                 break
@@ -67,8 +71,49 @@ def exterminate():
 
 
 # create new genomes based on two living genomes (restore population)
-def crossover():
-    pass
+def crossover(genome1, genome2):
+    if genome1.fitness > genome2.fitness:
+        parent1, parent2 = genome1, genome2
+    else:
+        parent1, parent2 = genome2, genome1
+
+    # implement the new genome
+    new_gene = copy.deepcopy(parent1)
+
+    # Inherit connection genes
+    old_c = []
+    for i, c1 in enumerate(parent1.connections):
+        c2 = filter(lambda c: c.innov == c1.innov, parent2.connections)
+        if not len(c2):
+            new_gene.connections.append(copy.copy(c1))
+        else:
+            old_c.append(i)
+
+            new_w = c1.w if random().random() > 0.5 else c2.w
+            new_active = c1.active if random().random() > 0.5 else c2.active
+
+            new_gene.connections.append(neat.Connection(c1.i, c1.o, new_w, c1.innov))
+            new_gene.connections[-1].active = new_active
+
+    for i in old_c[::-1]:
+        del new_gene.connections[i]
+
+    # Not necessary since we don't change node properties.
+    """ 
+    # Inherit node genes
+    old_n = []
+    for i, n1 in enumerate(parent1.nodes):
+        n2 = filter(lambda n: n.id == n1.id, parent2.nodes)
+        if not len(n2):
+            new_gene.nodes.append(copy.copy(n1))
+        else:
+            old_n.append(i)
+            new_gene.nodes.append(neat.Node(n1.id, n1.type))
+            
+    for i in old_c[::-1]:
+        del new_gene.nodes[i]
+    """
+    return new_gene
 
 
 if __name__ == '__main__':
