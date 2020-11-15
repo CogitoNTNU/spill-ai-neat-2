@@ -5,6 +5,7 @@ import nn
 import neat
 
 import time
+import copy
 
 import configparser
 
@@ -76,28 +77,41 @@ def crossover(genome1, genome2):
         parent1, parent2 = genome2, genome1
 
     # implement the new genome
-    new_gene = neat.Genome.__class__(parent1.key)
+    new_gene = copy.deepcopy(parent1)
 
     # Inherit connection genes
-    for key, cg1 in parent1.connections.items():
-        cg2 = parent2.connections.get(key)
-        if cg2 is None:
-            new_gene.connections[key] = cg1.copy()
+    old_c = []
+    for i, c1 in enumerate(parent1.connections):
+        c2 = filter(lambda c: c.innov == c1.innov, parent2.connections)
+        if not len(c2):
+            new_gene.connections.append(copy.copy(c1))
         else:
-            new_gene.connections[key] = crossover(cg1, cg2)
+            old_c.append(i)
 
+            new_w = c1.w if random().random() > 0.5 else c2.w
+            new_active = c1.active if random().random() > 0.5 else c2.active
+
+            new_gene.connections.append(neat.Connection(c1.i, c1.o, new_w, c1.innov))
+            new_gene.connections[-1].active = new_active
+
+    for i in old_c[::-1]:
+        del new_gene.connections[i]
+
+    # Not necessary since we don't change node properties.
+    """ 
     # Inherit node genes
-    parent1_set = parent1.nodes
-    parent2_set = parent2.nodes
-
-    for key, ng1 in parent1_set.items():
-        ng2 = parent2_set.get(key)
-        assert key not in new_gene.nodes
-        if ng2 is None:
-            new_gene.nodes[key] = ng1.copy()
+    old_n = []
+    for i, n1 in enumerate(parent1.nodes):
+        n2 = filter(lambda n: n.id == n1.id, parent2.nodes)
+        if not len(n2):
+            new_gene.nodes.append(copy.copy(n1))
         else:
-            # Homologous gene: combine genes from both parents.
-            new_gene.nodes[key] = crossover(ng1, ng2)
+            old_n.append(i)
+            new_gene.nodes.append(neat.Node(n1.id, n1.type))
+            
+    for i in old_c[::-1]:
+        del new_gene.nodes[i]
+    """
     return new_gene
 
 
