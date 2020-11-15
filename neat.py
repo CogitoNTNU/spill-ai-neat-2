@@ -4,6 +4,7 @@
 #import nn
 
 import configparser
+import copy
 import random
 from random import uniform
 
@@ -140,6 +141,32 @@ def find_yourself(to_find, current_node, connections):
             return True
     return False
 
+def crossover(genome1, genome2):
+    if genome1.fitness > genome2.fitness:
+        parent1, parent2 = genome1, genome2
+    else:
+        parent1, parent2 = genome2, genome1
+
+    # implement the new genome
+    new_gene = copy.deepcopy(parent1)
+
+    # Inherit connection genes
+    old_c = []
+    for i, c1 in enumerate(parent1.connections):
+        c2 = filter(lambda c: c.innov == c1.innov, parent2.connections)
+        if not len(c2):
+            new_gene.connections.append(copy.copy(c1))
+        else:
+            old_c.append(i)
+
+            new_w = c1.w if random().random() > 0.5 else c2.w
+            new_active = c1.active if random().random() > 0.5 else c2.active
+
+            new_gene.connections.append(neat.Connection(c1.i, c1.o, new_w, c1.innov))
+            new_gene.connections[-1].active = new_active
+
+    for i in old_c[::-1]:
+        del new_gene.connections[i]
 
 def mutate(genome, population):
 

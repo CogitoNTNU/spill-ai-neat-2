@@ -69,35 +69,6 @@ def evaluate():
 def exterminate():
     pass
 
-
-# create new genomes based on two living genomes (restore population)
-def crossover(genome1, genome2):
-    if genome1.fitness > genome2.fitness:
-        parent1, parent2 = genome1, genome2
-    else:
-        parent1, parent2 = genome2, genome1
-
-    # implement the new genome
-    new_gene = copy.deepcopy(parent1)
-
-    # Inherit connection genes
-    old_c = []
-    for i, c1 in enumerate(parent1.connections):
-        c2 = filter(lambda c: c.innov == c1.innov, parent2.connections)
-        if not len(c2):
-            new_gene.connections.append(copy.copy(c1))
-        else:
-            old_c.append(i)
-
-            new_w = c1.w if random().random() > 0.5 else c2.w
-            new_active = c1.active if random().random() > 0.5 else c2.active
-
-            new_gene.connections.append(neat.Connection(c1.i, c1.o, new_w, c1.innov))
-            new_gene.connections[-1].active = new_active
-
-    for i in old_c[::-1]:
-        del new_gene.connections[i]
-
     # Not necessary since we don't change node properties.
     """ 
     # Inherit node genes
@@ -138,7 +109,7 @@ if __name__ == '__main__':
         genomes = exterminate()
 
         # Replace exterminated with offspring from surviving genomes
-        genomes = crossover()
+        genomes = neat.crossover()
 
         # mutations: adjust weights, add new nodes and connections
         genomes = neat.mutate()
