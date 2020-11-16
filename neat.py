@@ -17,6 +17,9 @@ n_output = int(config['Genome']['n_output'])
 w_init_min = float(config['Genome']['weight_init_max'])
 w_init_max = float(config['Genome']['weight_init_min'])
 
+max_generations = float(config['Goals']['max_generation'])
+goal_fitness = float(config['Goals']['goal_fitness'])
+
 comp_thres = float(config['Species']['compatibility_threshold'])
 
 prob_mut_w = float(config['Mutation']['weight_probability'])
@@ -65,10 +68,63 @@ class Genome:
     def __init__(self, nodes, connections):
         self.nodes = nodes
         self.connections = connections
-        fitness = 0
+        self.fitness = 0
 
     def create_nn(self):
         return FFNN(self)
+
+
+def print_genome(genome):
+    i = list([n.id for n in genome.nodes if n.type == 'input'])
+    h = list([n.id for n in genome.nodes if n.type == 'hidden'])
+    o = list([n.id for n in genome.nodes if n.type == 'output'])
+    print(f'{len(genome.nodes)} Nodes:')
+    print(len(i), 'input:')
+    print(i)
+    print(len(h), 'hidden:')
+    print(h)
+    print(len(o), 'output:')
+    print(o)
+    print(f'{len(genome.connections)} Connections')
+    for c in genome.connections:
+        print(f"{c.i} -> {c.o} | w: {c.w}, active: {c.active}")
+
+
+def comp_distance(genome1, genome2):  # Compatibility distance
+    # Used for speciation. Compares two genomes and returns their similarity based on structure.
+    """
+    :param float E: Excess genes
+    :param float D: Disjoint genes
+    :param float N: Number of genes in the larger genome
+    :param float W: Average weight of matching genes (including disabled)
+    :return float: Compatibility distance
+    """
+
+    matching_c = [c for c in genome1.connections if c.innov in [c.innov for c in genome2.connections]]
+    matching_c_innov = [c.innov for c in matching_c]
+    disjoint = []
+    excess = []
+    if not len(matching_c_innov) == len(genome1.connections) == len(genome2.connections):
+        not_matching_c1_innov = [c.innov for c in genome1.connections if c.innov not in matching_c_innov]
+        not_matching_c2_innov = [c.innov for c in genome2.connections if c.innov not in matching_c_innov]
+        not_matching_c1_innov = not_matching_c1_innov if len(not_matching_c1_innov) else [-1]
+        not_matching_c2_innov = not_matching_c2_innov if len(not_matching_c2_innov) else [-1]
+        disjoint_max = min(max(not_matching_c1_innov), max(not_matching_c2_innov))
+
+        disjoint = [innov for innov in not_matching_c1_innov + not_matching_c2_innov if innov <= disjoint_max]
+        excess = [innov for innov in not_matching_c1_innov + not_matching_c2_innov if innov > disjoint_max]
+
+    c_1 = 0.1
+    c_2 = 0.1
+    c_3 = 0.1
+
+    E = len(excess)
+    D = len(disjoint)
+    N = max(len(genome1.nodes), len(genome2.nodes))
+    W = sum([c.w for c in matching_c])/len(matching_c) if len(matching_c) else 0
+    N = N if N >= 20 else 1
+
+    return c_1 * E / N + c_2 * D / N + c_3 * W
 
 
 # Store genomes and common properties
@@ -79,9 +135,11 @@ class Population:
         self.species = []
         self.innov_number = 0
         self.node_number = 1
+        self.size = size
+        self.generation = 0
 
         # Generate first population
-        for _ in range(size):
+        for i in range(size):
 
             nodes = []
             connections = []
@@ -90,56 +148,41 @@ class Population:
                 nodes.append(Node('input', self.node_number))
                 self.node_number += 1
             for _ in range(n_output):
-                outp = Node('output')
+                outp = Node('output', self.node_number)
                 nodes.append(outp)
                 self.node_number += 1
                 for inp in [node for node in nodes if node.type == 'input']:
-                    connections.append(Connection(inp, outp, uniform(w_init_min, w_init_max)))
+                    connections.append(Connection(inp, outp, uniform(w_init_min, w_init_max), self.innov_number))
                     self.innov_number += 1
 
-            self.species.append(self.genomes[0])
             self.genomes.append(Genome(nodes, connections))
 
-        # First Speciation
-        self.species = []
+            # First Speciation
+            if i == 0:
+                self.species = [[self.genomes[0]]]
+            else:
+                for specie in self.species:
+                    if comp_distance(self.genomes[-1], specie[0]) < comp_thres:
+                        specie.append(self.genomes[-1])
+                        break
+                    else:
+                        self.species.append([self.genomes[-1]])
 
 
-def comp_distance(genome_1, genome_2):  # Compatibility distance
-    # Used for speciation. Compares two genomes and returns their similarity based on structure.
-    """
-    :param float E: Excess genes
-    :param float D: Disjoint genes
-    :param float N: Number of genes in larger genomes
-    :param float W: Average weight of matching genes (including disabled)
-    :return float: Compatibility distance
-    """
-
-    c_1 = 0.1
-    c_2 = 0.1
-    c_3 = 0.1
-    N = N if N >= 20 else 1
-
-    return c_1 * E / N + c_2 * D / N + c_3 * W
-
-
-def adjusted_fitness(G):
+def adjusted_fitness(genome, species):
     # Every genome will get a fitness score after testing. This function will adjust this score based on
     # its population size, such that smaller species do not instantly eradicate.
-    """
-    :param Genotype G: Genotype
-    :return float:
-    """
-    return G.fitness / (sum(0 if cd > comp_thres else 1 for cd in [comp_distance(_, _, _, _) for G_j in Genes]))
+    return genome.fitness / len(species)
 
 
-def find_yourself(to_find, current_node, connections):
-    connect_to = [c.o for c in connections if c.i == current_node]
-    for next_node in connect_to:
-        if next_node == to_find:
-            return True
-        if find_yourself(to_find, next_node, connections):
-            return True
+def evaluate(population):
+    population.genomes.sort(key=lambda g: g.fitness)
+    if population.genomes[0] >= goal_fitness:
+        return population.genomes, True
+    if population.generation >= max_generations:
+        return population.genomes, True
     return False
+
 
 def crossover(genome1, genome2):
     if genome1.fitness > genome2.fitness:
@@ -151,22 +194,76 @@ def crossover(genome1, genome2):
     new_gene = copy.deepcopy(parent1)
 
     # Inherit connection genes
-    old_c = []
+    new_gene.connections = []
     for i, c1 in enumerate(parent1.connections):
-        c2 = filter(lambda c: c.innov == c1.innov, parent2.connections)
+        print(c1)
+        c2 = list(filter(lambda c: c.innov == c1.innov, parent2.connections))
         if not len(c2):
             new_gene.connections.append(copy.copy(c1))
         else:
-            old_c.append(i)
+            c2 = c2[0]
 
-            new_w = c1.w if random().random() > 0.5 else c2.w
-            new_active = c1.active if random().random() > 0.5 else c2.active
+            new_w = c1.w if random.random() > 0.5 else c2.w
+            new_active = c1.active if random.random() > 0.5 else c2.active
+            new_c = Connection(c1.i, c1.o, new_w, c1.innov)
+            new_c.active = new_active
+            new_gene.connections.append(new_c)
 
-            new_gene.connections.append(neat.Connection(c1.i, c1.o, new_w, c1.innov))
-            new_gene.connections[-1].active = new_active
+    # Not necessary since we don't change node properties.
+    """ 
+    # Inherit node genes
+    old_n = []
+    for i, n1 in enumerate(parent1.nodes):
+        n2 = filter(lambda n: n.id == n1.id, parent2.nodes)
+        if not len(n2):
+            new_gene.nodes.append(copy.copy(n1))
+        else:
+            old_n.append(i)
+            new_gene.nodes.append(neat.Node(n1.id, n1.type))
 
     for i in old_c[::-1]:
-        del new_gene.connections[i]
+        del new_gene.nodes[i]
+    """
+
+    return new_gene
+
+
+def renew_population(population):
+    for s in population.species:
+        for g in s:
+            g.fitness = adjusted_fitness(g, s)
+
+    population.genomes.sort(key=lambda g: g.fitness)
+    dead = population.genomes[population.size//2:]
+    population.genomes = population.genomes[:population.size//2]
+    for n in range(len(dead)):
+        population.genomes.append(crossover(random.choice(population.genomes), random.choice(population.genomes)))
+
+    # Speciation
+    population.species = [[population.genomes[0]]]
+    for genome in population.genomes[1:]:
+        for specie in population.species:
+            if comp_distance(genome, specie[0]) < comp_thres:
+                specie.append(genome)
+                break
+        else:
+            population.species.append([genome])
+
+    for d in dead:
+        del d
+
+    population.generation += 1
+
+
+def find_yourself(to_find, current_node, connections):
+    connect_to = [c.o for c in connections if c.i == current_node]
+    for next_node in connect_to:
+        if next_node == to_find:
+            return True
+        if find_yourself(to_find, next_node, connections):
+            return True
+    return False
+
 
 def mutate(genome, population):
 
@@ -199,10 +296,10 @@ def mutate(genome, population):
         random.shuffle(i_nodes)
         for i_node in i_nodes:
 
-            o_nodes = [n for n in genome.nodes if n.id != i_node.id and
-                      n.type != 'input' and
-                      filter(lambda c: c.i == i_node.id and c.o == n.id, genome.connections) and
-                      not find_yourself(i_node, n.id, genome.connections)]
+            o_nodes = [n for n in genome.nodes if n.id != i_node.id
+                       and n.type != 'input'
+                       and not len(list(filter(lambda c: c.i == i_node.id and c.o == n.id, genome.connections)))
+                       and not find_yourself(i_node, n.id, genome.connections)]
 
             if len(o_nodes):
                 o_node = random.choice(o_nodes)
@@ -243,32 +340,29 @@ class FFNN:
             values.append(get_value(output, self.nodes, self.connections, observation))
         return values
 
-def print_genome(genome):
-    i = list([n.id for n in genome.nodes if n.type == 'input'])
-    h = list([n.id for n in genome.nodes if n.type == 'hidden'])
-    o = list([n.id for n in genome.nodes if n.type == 'output'])
-    print(f'{len(genome.nodes)} Nodes:')
-    print(len(i), 'input:')
-    print(i)
-    print(len(h), 'hidden:')
-    print(h)
-    print(len(o), 'output:')
-    print(o)
-    print(f'{len(genome.connections)} Connections')
-    for c in genome.connections:
-        print(f"{c.i} -> {c.o} | w: {c.w}, active: {c.active}")
-
+"""
 xorgenome = Genome([Node("input", 0), Node("input", 1), Node("hidden", 2), Node("hidden", 3), Node("output", 4, sigmoid)],
                    [Connection(0, 2, 1, 0), Connection(0, 3, -1, 1), Connection(1, 2, 1, 2), Connection(1, 3, -1, 3),
                     Connection(2, 4, 1, 4), Connection(3, 4, 1, 5)])
 
+xorgenome_2 = copy.deepcopy(xorgenome)
+
 xorffnn = FFNN(xorgenome)
+print(xorffnn.activate([1, 0]))
 
 pop = Population(0)
 pop.genomes.append(xorgenome)
+pop.genomes.append(xorgenome_2)
 pop.innov_number = 6
 pop.node_number = 5
+
 print_genome(xorgenome)
-mutate(xorgenome, pop)
-print_genome(xorgenome)
-print(xorffnn.activate([1, 0]))
+print_genome(xorgenome_2)
+mutate(xorgenome_2, pop)
+xorgenome_2.fitness = 0
+print_genome(xorgenome_2)
+new_xorgenome = crossover(xorgenome, xorgenome_2)
+print_genome(new_xorgenome)
+
+print(comp_distance(xorgenome, new_xorgenome))
+"""
