@@ -34,12 +34,17 @@ prob_mut_d = float(config['Mutation']['deactivate_probability'])
 
 e = 2.71828182845904523536
 
+def input_activation(x):
+    return x/256
+
 # Activation functions
 def sigmoid(x):
     return 1 / (1 + e**(-x))
 
 
 def tanh(x):
+    x = 10 if x > 10 else x
+    x = -10 if x < -10 else x
     return (e**x - e**-x) / (e**x + e**-x)
 
 
@@ -48,10 +53,11 @@ def relu(x):
 
 # Genome component classes
 class Node:
-    def __init__(self, network_type, id, activation_f=relu):
+    def __init__(self, network_type, id, activation_f=tanh, inp_i=None):
         self.type = network_type
         self.id = id
         self.activation_f = activation_f
+        self.inp_i = inp_i
 
 
 class Connection:
@@ -132,7 +138,7 @@ class Population:
         self.genomes = []
         self.species = []
         self.innov_number = 0
-        self.node_number = 1
+        self.node_number = 0
         self.size = size
         self.generation = 0
 
@@ -142,15 +148,15 @@ class Population:
             nodes = []
             connections = []
 
-            for _ in range(n_input):
-                nodes.append(Node('input', self.node_number))
+            for j in range(n_input):
+                nodes.append(Node('input', self.node_number, activation_f=input_activation, inp_i=j))
                 self.node_number += 1
             for _ in range(n_output):
-                outp = Node('output', self.node_number)
+                outp = Node('output', self.node_number, activation_f=sigmoid)
                 nodes.append(outp)
                 self.node_number += 1
                 for inp in [node for node in nodes if node.type == 'input']:
-                    connections.append(Connection(inp, outp, uniform(w_init_min, w_init_max), self.innov_number))
+                    connections.append(Connection(inp.id, outp.id, uniform(w_init_min, w_init_max), self.innov_number))
                     self.innov_number += 1
 
             self.genomes.append(Genome(nodes, connections))
@@ -165,7 +171,15 @@ class Population:
                         break
                     else:
                         self.species.append([self.genomes[-1]])
+        print_genome(self.genomes[0])
 
+    def print_status(self):
+        print(f"Generation: {self.generation}")
+
+    def print_species(self):
+        for i, s in enumerate(self.species):
+            print(i, ':')
+            print(s)
 
 def adjusted_fitness(genome, species):
     # Every genome will get a fitness score after testing. This function will adjust this score based on
@@ -174,14 +188,14 @@ def adjusted_fitness(genome, species):
 
 
 def evaluate(population):
-    population.genomes.sort(key=lambda g: g.fitness)
+    population.genomes.sort(key=lambda g: g.fitness, reverse=True)
     # Has a genome reached the goal fitness?
-    if population.genomes[0] >= goal_fitness:
+    if population.genomes[0].fitness >= goal_fitness:
         return population.genomes, True
     # Have the simulaiton ran out of generations?
     if population.generation >= max_generations:
         return population.genomes, True
-    return False
+    return population.genomes, False
 
 
 def crossover(genome1, genome2):
@@ -196,7 +210,6 @@ def crossover(genome1, genome2):
     # Inherit connection genes
     new_gene.connections = []
     for i, c1 in enumerate(parent1.connections):
-        print(c1)
         c2 = list(filter(lambda c: c.innov == c1.innov, parent2.connections))
         if not len(c2):
             # Inferior genome does not have connection, append it from superior
@@ -238,7 +251,7 @@ def renew_population(population):
             g.fitness = adjusted_fitness(g, s)
 
     # Remove worst genomes
-    population.genomes.sort(key=lambda g: g.fitness)
+    population.genomes.sort(key=lambda g: g.fitness, reverse=True)
     dead = population.genomes[population.size//2:]
     population.genomes = population.genomes[:population.size//2]
 
@@ -332,7 +345,7 @@ def find_parents(node, nodes, connections):
 # Recursive function for neural network. Probably one of the worst offenders optimally in this code:3
 def get_value(node, nodes, connections, observation):
     if node.type == "input":
-        return observation[node.id]
+        return observation[node.inp_i]
 
     parents, parents_c = find_parents(node, nodes, connections)
     parents_v = [get_value(parent, nodes, connections, observation) for parent in parents]

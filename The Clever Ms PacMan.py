@@ -35,27 +35,37 @@ def selection(pop):
         # Start new instance of atari environment
         observation = env.reset()
 
+        prev_action = -1
+
         # run environment for certain timeframe
         for t in range(1000):
 
             if render:
                 env.render()
-                time.sleep(.01)
+                time.sleep(.001)
 
             # Run NN based on ram from environment
-            action = pheno.activate(observation)
-            print(action)
             # input action
-            observation, reward, done, info = env.step(action[0]*10)
+            action = pheno.activate(observation)[0]
+            #print(action)
+            action = neat.sigmoid(action) - 0.00001
+            action = int(action*8)
+
+            #if action == prev_action:
+            #    genome.fitness -= 2
+            observation, reward, done, info = env.step(action)
+            prev_action = action
             # calculate fitness (can be changed)
-            genome.fitness += reward / 10 + 2
+            #if reward:
+            #    print(reward)
+            genome.fitness += reward # + 1
             # ends test if game over
             if done:
                 break
 
         else:
             # runs only if agent did not die within timeframe
-            genome.fitness += 30
+            genome.fitness += 10
 
         env.close()
 
@@ -73,9 +83,14 @@ if __name__ == '__main__':
         # Give genomes fitness score
         selection(population)
 
+        population.print_status()
+        population.print_species()
+
         # Adjust fitness, determine whether we have reached a desired score
         genomes, finished = neat.evaluate(population)
         if finished:
+            neat.print_genome(genomes[0])
+            print(genomes[0].fitness)
             break
 
         # Exterminate worst genomes
