@@ -73,7 +73,7 @@ if __name__ == '__main__':
         # Give genomes fitness score
         selection(population)
 
-        # Adjust fitness, determine whether we reached desired score
+        # Adjust fitness, determine whether we have reached a desired score
         genomes, finished = neat.evaluate(population)
         if finished:
             break

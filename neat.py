@@ -34,7 +34,7 @@ prob_mut_d = float(config['Mutation']['deactivate_probability'])
 
 e = 2.71828182845904523536
 
-
+# Activation functions
 def sigmoid(x):
     return 1 / (1 + e**(-x))
 
@@ -46,7 +46,7 @@ def tanh(x):
 def relu(x):
     return max(0, x)
 
-
+# Genome component classes
 class Node:
     def __init__(self, network_type, id, activation_f=relu):
         self.type = network_type
@@ -74,6 +74,7 @@ class Genome:
         return FFNN(self)
 
 
+# Genome presentation
 def print_genome(genome):
     i = list([n.id for n in genome.nodes if n.type == 'input'])
     h = list([n.id for n in genome.nodes if n.type == 'hidden'])
@@ -90,20 +91,16 @@ def print_genome(genome):
         print(f"{c.i} -> {c.o} | w: {c.w}, active: {c.active}")
 
 
-def comp_distance(genome1, genome2):  # Compatibility distance
-    # Used for speciation. Compares two genomes and returns their similarity based on structure.
-    """
-    :param float E: Excess genes
-    :param float D: Disjoint genes
-    :param float N: Number of genes in the larger genome
-    :param float W: Average weight of matching genes (including disabled)
-    :return float: Compatibility distance
-    """
-
+# Compatibility distance
+# Used for speciation. Compares two genomes and returns their similarity based on structure.
+# Full explanation in paper
+def comp_distance(genome1, genome2):
+    # Find values for constants
     matching_c = [c for c in genome1.connections if c.innov in [c.innov for c in genome2.connections]]
     matching_c_innov = [c.innov for c in matching_c]
     disjoint = []
     excess = []
+    # Runs only if disjoint or excess connections exist
     if not len(matching_c_innov) == len(genome1.connections) == len(genome2.connections):
         not_matching_c1_innov = [c.innov for c in genome1.connections if c.innov not in matching_c_innov]
         not_matching_c2_innov = [c.innov for c in genome2.connections if c.innov not in matching_c_innov]
@@ -118,12 +115,13 @@ def comp_distance(genome1, genome2):  # Compatibility distance
     c_2 = 0.1
     c_3 = 0.1
 
-    E = len(excess)
-    D = len(disjoint)
-    N = max(len(genome1.nodes), len(genome2.nodes))
-    W = sum([c.w for c in matching_c])/len(matching_c) if len(matching_c) else 0
+    E = len(excess) # Excess connections
+    D = len(disjoint) # Disjoint connections
+    N = max(len(genome1.nodes), len(genome2.nodes)) # Number of nodes
     N = N if N >= 20 else 1
+    W = sum([c.w for c in matching_c])/len(matching_c) if len(matching_c) else 0 # Average weight between matching connections
 
+    # Speciation formulae from paper
     return c_1 * E / N + c_2 * D / N + c_3 * W
 
 
@@ -177,8 +175,10 @@ def adjusted_fitness(genome, species):
 
 def evaluate(population):
     population.genomes.sort(key=lambda g: g.fitness)
+    # Has a genome reached the goal fitness?
     if population.genomes[0] >= goal_fitness:
         return population.genomes, True
+    # Have the simulaiton ran out of generations?
     if population.generation >= max_generations:
         return population.genomes, True
     return False
@@ -199,8 +199,10 @@ def crossover(genome1, genome2):
         print(c1)
         c2 = list(filter(lambda c: c.innov == c1.innov, parent2.connections))
         if not len(c2):
+            # Inferior genome does not have connection, append it from superior
             new_gene.connections.append(copy.copy(c1))
         else:
+            # Both genomes have the connection. Choose randomly which properties are inherited from which genomes
             c2 = c2[0]
 
             new_w = c1.w if random.random() > 0.5 else c2.w
@@ -209,7 +211,8 @@ def crossover(genome1, genome2):
             new_c.active = new_active
             new_gene.connections.append(new_c)
 
-    # Not necessary since we don't change node properties.
+    # Inherit node properties
+    # Not necessary since we don't change node properties (all are inherited from superior).
     """ 
     # Inherit node genes
     old_n = []
@@ -229,13 +232,17 @@ def crossover(genome1, genome2):
 
 
 def renew_population(population):
+    # Adjust fitness based on the size of their population
     for s in population.species:
         for g in s:
             g.fitness = adjusted_fitness(g, s)
 
+    # Remove worst genomes
     population.genomes.sort(key=lambda g: g.fitness)
     dead = population.genomes[population.size//2:]
     population.genomes = population.genomes[:population.size//2]
+
+    # Generate new genomes using crossover of two remaining genomes
     for n in range(len(dead)):
         population.genomes.append(crossover(random.choice(population.genomes), random.choice(population.genomes)))
 
@@ -249,12 +256,13 @@ def renew_population(population):
         else:
             population.species.append([genome])
 
+    # Delete from memory
     for d in dead:
         del d
 
     population.generation += 1
 
-
+# Used to ensure no new connections lead to loops
 def find_yourself(to_find, current_node, connections):
     connect_to = [c.o for c in connections if c.i == current_node]
     for next_node in connect_to:
@@ -292,15 +300,18 @@ def mutate(genome, population):
 
     # Connection mutation
     if random.random() < prob_mut_c:
+        # Find potential input nodes
         i_nodes = [n for n in genome.nodes if n.type != 'output']
         random.shuffle(i_nodes)
         for i_node in i_nodes:
-
+            # Find potential output nodes
             o_nodes = [n for n in genome.nodes if n.id != i_node.id
                        and n.type != 'input'
+                       # Check if connection already exists (optimize plox)
                        and not len(list(filter(lambda c: c.i == i_node.id and c.o == n.id, genome.connections)))
+                       # Check if connection leads to loop
                        and not find_yourself(i_node, n.id, genome.connections)]
-
+            # If any exist, choose one of them
             if len(o_nodes):
                 o_node = random.choice(o_nodes)
                 genome.connections.append(
@@ -309,12 +320,16 @@ def mutate(genome, population):
                 break
 
 
+# NEURAL NETWORK (Phenome)
+
+
 def find_parents(node, nodes, connections):
     parents_c = [c for c in connections if c.o == node.id and c.active]
     ids = [c.i for c in parents_c]
     return [n for n in nodes if n.id in ids], parents_c
 
 
+# Recursive function for neural network. Probably one of the worst offenders optimally in this code:3
 def get_value(node, nodes, connections, observation):
     if node.type == "input":
         return observation[node.id]
@@ -340,6 +355,7 @@ class FFNN:
             values.append(get_value(output, self.nodes, self.connections, observation))
         return values
 
+# Testing area
 """
 xorgenome = Genome([Node("input", 0), Node("input", 1), Node("hidden", 2), Node("hidden", 3), Node("output", 4, sigmoid)],
                    [Connection(0, 2, 1, 0), Connection(0, 3, -1, 1), Connection(1, 2, 1, 2), Connection(1, 3, -1, 3),
