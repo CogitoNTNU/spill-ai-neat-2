@@ -19,3 +19,6 @@ Som oftest må programmet som kjører environmentet (ale_c.dll) bli bygget på s
 2. Når moduler er installert, setter man `ale_c.dll` i `.\venv\Lib\site-packages\atari_py\ale_interface`
 
 3. Ved å kjøre `The Clever Ms PacMan.py`, starter man neuroevolusjonen
+
+### NEAT Diagram
+![NEAT Diagram](images/NEAT-Diagram.svg)
