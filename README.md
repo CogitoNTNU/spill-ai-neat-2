@@ -4,6 +4,8 @@ Prosjekt gruppe som lager agent som spiller spill
 
 Anbefaler å kjøres i python 3.8 (64-bit)
 
+[Link til paper om NEAT](http://nn.cs.utexas.edu/downloads/papers/stanley.ec02.pdf)
+
 ### Installasjon
 MsPacman kjøres på en atari gjennom Arcade Learning Environment. \
 Som oftest må programmet som kjører environmentet (ale_c.dll) bli bygget på sin egen pc, men man kan forsøke å bruke filen som er inkludert i prosjektet.

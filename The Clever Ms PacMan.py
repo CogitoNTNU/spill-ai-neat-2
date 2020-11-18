@@ -15,6 +15,7 @@ config.read('config.ini')
 
 pop_size = int(config['Environment']['population_size'])
 render = bool(config['Environment']['render'])
+parallel_sims = int(config['Environment']['parallel_simulations'])
 
 env = None
 
@@ -29,16 +30,18 @@ def start():
 # Give every genome a fitness score
 def selection(pop):
     for genome in pop.genomes:
+
+        genome.fitness = 0
+
         # Create NN from genome
         pheno = neat.FFNN(genome)
 
         # Start new instance of atari environment
         observation = env.reset()
 
-        prev_action = -1
-
         # run environment for certain timeframe
-        for t in range(1000):
+        #for t in range(1000):
+        while True:
 
             if render:
                 env.render()
@@ -54,7 +57,6 @@ def selection(pop):
             #if action == prev_action:
             #    genome.fitness -= 2
             observation, reward, done, info = env.step(action)
-            prev_action = action
             # calculate fitness (can be changed)
             #if reward:
             #    print(reward)
@@ -68,7 +70,6 @@ def selection(pop):
             genome.fitness += 10
 
         env.close()
-
 
 if __name__ == '__main__':
     # Start environment<
@@ -100,3 +101,6 @@ if __name__ == '__main__':
         # mutations: adjust weights, add new nodes and connections
         for genome in population.genomes:
             neat.mutate(genome, population)
+
+    input("Finished:")
+    selection(population)
